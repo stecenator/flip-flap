@@ -30,7 +30,7 @@
 ###############################################################################
 use Getopt::Std;
 use strict "vars";
-use lib './';									# żeby można było rzrobić use Moduł z pliku Moduł.pm w biezacym katalogu
+use lib './;../toys';								# żeby można było rzrobić use Moduł z pliku Moduł.pm w biezacym katalogu
 use HADRtools;	
 use Toys;
 use ISPtools;
