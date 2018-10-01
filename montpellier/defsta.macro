@@ -1,0 +1,9 @@
+def path X3650-449_STO MAIN_DRIVE00 srct=serv destt=drive LIBRARY=MAINLIB DEVICE=mt3.0.0.3
+def path X3650-449_STO MAIN_DRIVE10 srct=serv destt=drive LIBRARY=MAINLIB DEVICE=mt1.0.0.3
+def path X3650-449_STO MAIN_DRIVE15 srct=serv destt=drive LIBRARY=MAINLIB DEVICE=mt0.0.0.3
+def path X3650-449_STO MAIN_DRIVE20 srct=serv destt=drive LIBRARY=MAINLIB DEVICE=mt2.0.0.2
+def path X3650-449_STO MAIN_DRIVE25 srct=serv destt=drive LIBRARY=MAINLIB DEVICE=mt1.0.0.2
+def path X3650-449_STO MAIN_DRIVE30 srct=serv destt=drive LIBRARY=MAINLIB DEVICE=mt0.0.0.2
+def path X3650-449_STO MAIN_DRIVE35 srct=serv destt=drive LIBRARY=MAINLIB DEVICE=mt3.0.0.2
+def path X3650-449_STO MAIN_DRIVE05 srct=serv destt=drive LIBRARY=MAINLIB DEVICE=mt2.0.0.3
+
