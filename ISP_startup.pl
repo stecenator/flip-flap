@@ -30,7 +30,7 @@
 ###############################################################################
 use Getopt::Std;
 use strict "vars";
-use lib qw(./ ../toys);								# żeby można było rzrobić use Moduł z pliku Moduł.pm w biezacym katalogu
+use lib qw(./ ../toys/lib);								# żeby można było rzrobić use Moduł z pliku Moduł.pm w biezacym katalogu
 use HADRtools;	
 use Gentools qw(dbg verb yes_no print_hash check_proc);
 use ISPtools;
