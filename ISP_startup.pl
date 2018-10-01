@@ -85,7 +85,7 @@ sub setup()
 		$verbose =1; 
 		$HADRtools::verbose=1;			# Bo debug w HADRtools jest w innym package
 		$ISPtools::verbose=1;			# Bo debug w ISPtools jest w innym package
-		$Toys::verbose=1;			# Bo debug w Toys jest w innym package
+		$Gentools::verbose=1;			# Bo debug w Toys jest w innym package
 		dbg("Main::setup","Włączono tryb verbose.\n");
 	}
 	if(defined $opts{"h"}) { help(0); }
