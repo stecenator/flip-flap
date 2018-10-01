@@ -32,7 +32,7 @@ use Getopt::Std;
 use strict "vars";
 use lib qw(./ ../toys);								# żeby można było rzrobić use Moduł z pliku Moduł.pm w biezacym katalogu
 use HADRtools;	
-use Toys;
+use Gentools qw(dbg verb yes_no print_hash check_proc);
 use ISPtools;
 # Kosmetyka 
 our $debug = 0;
@@ -77,7 +77,7 @@ sub setup()
 		$debug =1;
 		$HADRtools::debug=1;			# Bo debug w HADRtools jest w innym package
 		$ISPtools::debug=1;			# Bo debug w ISPtools jest w innym package
-		$Toys::debug=1;				# Bo debug w Toys jest w innym package
+		$Gentools::debug=1;				# Bo debug w Toys jest w innym package
 		dbg("MAIN::setup","Włączono tryb debug.\n");
 	}
 	if(defined $opts{"v"}) 
@@ -108,7 +108,7 @@ sub setup()
 	{
 		$instuser = $opts{"u"};
 		dbg("Main::setup", "Zmieniono domyslnego użytkownika instancji na $instuser.\n");
-		verbose("Uzytkownik instancji ISP/DB2: $instuser.\n");
+		verb("Uzytkownik instancji ISP/DB2: $instuser.\n");
 		my $uid = getpwnam("$instuser");
 		if(defined $uid) 
 		{
@@ -126,29 +126,29 @@ sub setup()
 		$instdir = $opts{"i"};
 		dbg("Main::setup", "Zmieniono domyslną ścieżkę katalogu instancji na $instdir.\n");
 		$instdir =~ s/(.*)\//$1/;
-		verbose("Katalog instancji instancji ISP: $instdir.\n");
+		verb("Katalog instancji instancji ISP: $instdir.\n");
 	}
 	
-	verbose("Sprawdzanie poprawności użyszkodnika $instuser... ");
+	verb("Sprawdzanie poprawności użyszkodnika $instuser... ");
 	if(check_DB2_inst("$instuser"))
 	{
-		verbose("OK\n");
+		verb("OK\n");
 	}
 	else
 	{
-		verbose("Qpa!\n");
+		verb("Qpa!\n");
 		print STDERR "Użytkownik $instuser nie jest właścicielem instancji DB2.\n";
 		exit(4);
 	}
 	
-	verbose("Sprawdzanie czy plik $instdir/dsmserv.opt jest dostępny... ");
+	verb("Sprawdzanie czy plik $instdir/dsmserv.opt jest dostępny... ");
 	if( -r "$instdir/dsmserv.opt" )
 	{
-		verbose("Tak\n");
+		verb("Tak\n");
 	}
 	else
 	{
-		verbose("Nie\n");
+		verb("Nie\n");
 		if("$mode" eq "master")
 		{
 			print STDERR "Plik $instdir/dsmserv.opt musi być dostępny przy uruchamianiu w trybie master.\n";
@@ -166,21 +166,21 @@ setup();
 # DB2 musi być wystartowane zawsze.
 if(!is_DB2_active("$instuser"))						
 {
-	verbose("Starowanie database managera... ");
+	verb("Starowanie database managera... ");
 	if(start_DB2("$instuser"))
 	{
-		verbose("OK\n");
+		verb("OK\n");
 	}
 	else
 	{
-		verbose("Qpa!\n");
+		verb("Qpa!\n");
 		print STDERR "Nie udało się wystartować database managera na użyszkodniku $instuser (komenda db2start).\n";
 		exit(14);
 	}
 }
 else
 {
-	verbose("Manager bazy danych jest już uruchomiony.\n");
+	verb("Manager bazy danych jest już uruchomiony.\n");
 }
 
 # Baza wystartowana, sciągam konfig HADRa
@@ -197,86 +197,86 @@ if($mode eq "master")
 	# W trybie master chcemy mieć najpierw pasywną maszynę	
 	exit(10) if !yes_no("Czy instancja $instuser na ".$hadr_cfg{"HADR_REMOTE_HOST"}." jest uruchomiona w trybie slave?", "N");
 	
-	verbose("Sprawdzanie, czy $instuser/TSMDB1 jest już aktywna... ");
+	verb("Sprawdzanie, czy $instuser/TSMDB1 jest już aktywna... ");
 	if(is_DB_active("$instuser","TSMDB1"))
 	{
-		verbose("Tak\n");
-		verbose("Sprawdzenie biezącego trybu HADR bazy $instuser/TSMDB1... ");
+		verb("Tak\n");
+		verb("Sprawdzenie biezącego trybu HADR bazy $instuser/TSMDB1... ");
 		my $hadr_mode = get_HADR_mode("$instuser");
 		if( $hadr_mode == 0)
 		{	
-			verbose("Standalone\n");
+			verb("Standalone\n");
 			print STDERR "Baza $instuser/TSMDB1 działa, ale w trybie samodzielnym.\n";
 			exit(16);
 		}
 		elsif ( $hadr_mode == 2 )
 		{	
-			verbose("Slave\n");
+			verb("Slave\n");
 			print STDERR "Baza $instuser/TSMDB1 działa, ale jako HADR slave.\n";
 			print STDERR "Żeby przełączyć klaster na tę instancję użyj polecenia $my_name -m takeover.\n";
 			exit(16);
 		}
 		elsif ( $hadr_mode == 1 )
 		{
-			verbose("Master\n");
+			verb("Master\n");
 		}
 		else
 		{
-			verbose("Nieznany\n");
+			verb("Nieznany\n");
 			print STDERR "Nie udało się określić trybu pracy bazy $instuser/TSMDB1. Być może warto użyć trybu debug (-d).\n";
 			exit(16);
 		}
 	}
 	else
 	{
-		verbose("Nie\n");
-		verbose("Uruchamianie bazy $instuser/TSMDB1 w trybie master... ");
+		verb("Nie\n");
+		verb("Uruchamianie bazy $instuser/TSMDB1 w trybie master... ");
 		if(start_HADR_master($instuser))
 		{
-			verbose("OK.\n");
+			verb("OK.\n");
 		}
 		else
 		{
-			verbose("Qpa!\n");
+			verb("Qpa!\n");
 			print STDERR "Uruchomienie bazy $instuser/TSMDB1 w trybie master nie powodło się.\n";
 			exit(13);
 		}
 	}
 	# Na tym etapie baza TSMDB1 jest aktywowana jako HADR master.
-	verbose("Startowanie instancji IBM spectrum Protect: $instuser... ");
+	verb("Startowanie instancji IBM spectrum Protect: $instuser... ");
 	if(start_ISP("$instuser"))
 	{
-		verbose("OK\n");
+		verb("OK\n");
 		exit(0)
 	}
 	else
 	{
-		verbose("Qpa!\n");
+		verb("Qpa!\n");
 		print STDERR "Nie udało się uruchomić instancji $instuser IBM Spectrum Protect.\n";
 		exit(17);
 	}
 }
 elsif($mode eq "slave")
 {
-	verbose("Uruchamianie instancji $instuser w trybie slave... ");
+	verb("Uruchamianie instancji $instuser w trybie slave... ");
 	if(start_HADR_slave($instuser))
 	{
-		verbose("OK.\n");
+		verb("OK.\n");
 	}
 	else
 	{
-		verbose("Qpa!\n");
+		verb("Qpa!\n");
 		print STDERR "Uruchomienie instancji $instuser w trybie slave nie powodło się.\n";
 		exit(13);
 	}
 }
 elsif($mode eq "takeover")
 {
-	verbose("Takeover - durnostojka.\n");
+	verb("Takeover - durnostojka.\n");
 }
 elsif($mode eq "failover")
 {
-	verbose("Failover - Durnostojka.\n");
+	verb("Failover - Durnostojka.\n");
 }
 elsif($mode eq "show")
 {
@@ -285,14 +285,14 @@ elsif($mode eq "show")
 }
 elsif($mode eq "status")
 {
-	verbose("Sprawdzanie czy baza $instuser/TSMDB1 jest aktywna... ");
+	verb("Sprawdzanie czy baza $instuser/TSMDB1 jest aktywna... ");
 	if(!is_DB_active("$instuser", "TSMDB1"))
 	{
-		verbose("Nie\n");
+		verb("Nie\n");
 		print STDERR "Baza TSMDB1 nie jest aktywna. Status HADR niedostępny.\n";
 		exit(9);
 	}
-	verbose("Tak\n");
+	verb("Tak\n");
 	my %hadr_status = get_HADR_status("$instuser");
 	print_hash("Status HADR bazy TSMDB1:", %hadr_status);
 	exit 0;
