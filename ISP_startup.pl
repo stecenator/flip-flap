@@ -26,14 +26,16 @@
 #  15   - Katalog instancji niewłaściwy lub niedostępny                       #
 #  16   - Baza działa, ale nie w trybie master                                #
 #  17   - Nie udało się uruchomić TSMa                                        #
+#  18   - Próba failover przy działającym partnerze                           #
+#  19   - Próba failover przy na węźle primary                                #
 #                                                                             #
 ###############################################################################
 use Getopt::Std;
 use strict "vars";
 use lib qw(./ ../toys/lib);								# żeby można było rzrobić use Moduł z pliku Moduł.pm w biezacym katalogu
 use HADRtools;	
-use Gentools qw(dbg verb yes_no print_hash check_proc);
-use ISPtools;
+use Gentools qw(dbg verb yes_no print_hash check_proc error);
+use ISPtools qw(start_ISP is_ISP_active);
 # Kosmetyka 
 our $debug = 0;
 our $verbose = 0;
@@ -43,6 +45,7 @@ our %hadr_cfg =();
 our $instuser = "tsminst1";							# Użyszkodnik instancji
 our $instdir = "/tsm/tsminst1/";							# Domyślny katalog instancji tsm
 our $mode="";
+our $isp_pid = -1;
 
 # Wyświetla help do programu.
 sub help($)
@@ -64,7 +67,7 @@ sub help($)
 }
 
 sub setup()
-# Parsowanie wiersza poleceń i ogólen sprawdzanie poprawności.
+# Parsowanie wiersza poleceń i ogólne sprawdzanie poprawności.
 {
 	if($< != 0)
 	{
@@ -244,7 +247,7 @@ if($mode eq "master")
 	}
 	# Na tym etapie baza TSMDB1 jest aktywowana jako HADR master.
 	verb("Startowanie instancji IBM spectrum Protect: $instuser... ");
-	if(start_ISP("$instuser"))
+	if(start_ISP("$instuser", "$instdir"))
 	{
 		verb("OK\n");
 		exit(0)
@@ -272,28 +275,49 @@ elsif($mode eq "slave")
 }
 elsif($mode eq "takeover")
 {
-	verb("Takeover - durnostojka.\n");
+	verb("Takeover - Durnostojka.\n");
 }
 elsif($mode eq "failover")
 {
-	verb("Failover - Durnostojka.\n");
+	if( $hadr_cfg{"ROLE"} eq "PRIMARY")
+	{
+		error("MAIN:", "Oprację \"failover\" można wykonać tylko na maszynie STANDBY.\n", 19);
+	}
+	
+	dbg("MAIN:", "Rozpoczynanie operacji failover.\n");
+	verb("Rozpoczynanie operacji failover.\n");
+	
 }
 elsif($mode eq "show")
 {
-	print_hash("Konifugacja HADR bazy TSMDB1 instancji $instuser:", %hadr_cfg);
+	verb("Konifugacja HADR bazy TSMDB1 instancji $instuser:\n");
+	print_hash(%hadr_cfg);
 	exit 0;
 }
 elsif($mode eq "status")
 {
-	verb("Sprawdzanie czy baza $instuser/TSMDB1 jest aktywna... ");
+	print("Sprawdzanie czy baza $instuser/TSMDB1 jest aktywna... ");
 	if(!is_DB_active("$instuser", "TSMDB1"))
 	{
-		verb("Nie\n");
+		print("Nie\n");
 		print STDERR "Baza TSMDB1 nie jest aktywna. Status HADR niedostępny.\n";
 		exit(9);
 	}
-	verb("Tak\n");
+	print("Tak\n");
 	my %hadr_status = get_HADR_status("$instuser");
-	print_hash("Status HADR bazy TSMDB1:", %hadr_status);
+	print("Status HADR bazy TSMDB1:\n");
+	print_hash(%hadr_status);
+	
+	print("Status serwera ISP...");
+	$isp_pid = is_ISP_active("$instuser");
+	if( $isp_pid > 0 )
+	{
+		print "Tak. PID = $isp_pid\n";
+	}
+	else
+	{
+		print "Nie.\n";
+	}
+	
 	exit 0;
 }

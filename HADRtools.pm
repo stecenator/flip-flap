@@ -5,7 +5,8 @@ use lib qw(./ ../toys/lib);
 use Gentools qw(verb dbg print_hash error);
 use Exporter qw(import);
 # exportowane funkcje
-our @EXPORT = qw(get_HADR_mode $debug get_HADR_cfg check_DB2_inst set_HADR_cfg is_DB2_active start_HADR_slave start_HADR_master start_DB2 get_HADR_status is_DB_active);
+our @EXPORT = qw(get_HADR_mode $debug get_HADR_cfg check_DB2_inst set_HADR_cfg 
+	is_DB2_active start_HADR_slave start_HADR_master start_DB2 get_HADR_status is_DB_active is_peer_connected);
 our ($debug, $verbose);
 
 sub is_DB_active($$)
@@ -306,5 +307,21 @@ sub get_HADR_mode($)
 	}
 	return $ret;
 }	
+
+sub is_peer_connected($)
+# Sprawdza, czy peer ma status connected
+{
+	my $instuser = shift;
+	my %status = get_HADR_status("$instuser");
+	dbg("HADRtools::is_peer_connected", "Status partnera: ".$status{"HADR_CONNECT_STATUS"}."\n");
+	if( $status{"HADR_CONNECT_STATUS"} eq "CONNECTED")
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
 
 1;				# Bo tak kurwa ma być
