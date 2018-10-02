@@ -2,7 +2,7 @@ package HADRtools;
 use strict;
 use warnings;
 use lib qw(./ ../toys/lib);
-use Gentools;
+use Gentools qw(verb dbg print_hash error);
 use Exporter qw(import);
 # exportowane funkcje
 our @EXPORT = qw(get_HADR_mode $debug get_HADR_cfg check_DB2_inst set_HADR_cfg is_DB2_active start_HADR_slave start_HADR_master start_DB2 get_HADR_status is_DB_active);
@@ -189,7 +189,11 @@ sub get_HADR_cfg($)
 		my $rc = $? >> 8;
 		if ($rc != 0)			# Coś poszło nie tak
 		{
-			dbg("HADRtools::get_HADR_cfg", "Wykonanie db2 get db cfg for tsmdb1 na użytkowniku $_[0] nie powiodło się. Kod wyjścia z \"su -c ...\": $rc\n");
+			error("HADRtools::get_HADR_cfg", "Wykonanie db2 get db cfg for tsmdb1 na użytkowniku $_[0] nie powiodło się. Kod wyjścia z \"su -c ...\": $rc\n", 0);
+			if( $rc == 4 ) 
+			{
+				error("HADRtools::get_HADR_cfg", "Manager bazy danych nie został wystartowany.\n", 9);		# 9 - kod z HADRsetup oznaczający brak managera bazy danych
+			}
 		}
 		else
 		{
@@ -198,10 +202,33 @@ sub get_HADR_cfg($)
 			{
 				chomp $line;
 				#~ dbg("get_HADR_mode", "$line");
-				if($line =~ /(HADR_\w+)\) = (.*$)/)		# Wyciągam atrybuty konifguracji HADR
+				if($line =~ /HADR database role *= (.*$)/)	# Wyciągam atrybut konifguracji HADRdatabase role bo ten atrybut jest nietypowy
+				{
+					$ret{"ROLE"} = "$1";			# Buduję hasha HADR_COŚTAM -> Wartość Sprawdzić czy nie trzeba chomp($2)
+					dbg("HADRtools::get_HADR_cfg", "ROLE -> $1\n");
+					next;
+				}
+				
+				if($line =~ /(HADR_SPOOL_LIMIT)\) = (.*)\(/)	# Wyciągam atrybuty konifguracji HADR_SPOOL_LIMIT bo ten atrybut jest nietypowy
 				{
 					$ret{"$1"} = "$2";			# Buduję hasha HADR_COŚTAM -> Wartość Sprawdzić czy nie trzeba chomp($2)
 					dbg("HADRtools::get_HADR_cfg", "$1 -> $2\n");
+					next;
+				}
+				
+				if($line =~ /(HADR_\w+)\) = (.*$)/)		# Wyciągam atrybuty konifguracji HADR
+				{
+					if("$2" eq "")				# Buduję hasha HADR_COŚTAM -> Wartość  - Wartość nie może być pusta bo się pierdoli w hashu
+					{
+						$ret{"$1"} = "NONE";
+					}
+					else
+					{
+						$ret{"$1"} = "$2";
+					}
+					
+					dbg("HADRtools::get_HADR_cfg", "$1 -> ".$ret{"$1"}."\n");
+					next;
 				}
 				if($line =~ /(LOGINDEXBUILD)\) = (.*$)/)
 				{

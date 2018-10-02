@@ -28,7 +28,7 @@ use lib './';									# żeby można było rzrobić use Moduł z pliku Moduł.pm
 # Moje moduły
 #~ use HADRtools qw(get_HADR_mode get_HADR_cfg check_DB2_inst set_HADR_cfg);	# Bo nie chce wciągać wszystkich exportowanych funkcji
 use HADRtools;	
-use Toys;
+use Gentools qw(verb dbg print_hash);
 use ISPtools;
 # Kosmetyka 
 our $debug = 0;
@@ -74,7 +74,7 @@ sub setup()
 		$debug =1;
 		$HADRtools::debug=1;			# Bo debug w HADRtools jest w innym package
 		$ISPtools::debug=1;			# Bo debug w ISPtools jest w innym package
-		$Toys::debug=1;				# Bo debug w Toys jest w innym package
+		$Gentools::debug=1;				# Bo debug w Toys jest w innym package
 		dbg("setup","Włączono tryb debug.\n");
 	}
 	if(defined $opts{"v"}) 
@@ -82,7 +82,7 @@ sub setup()
 		$verbose =1; 
 		$HADRtools::verbose=1;			# Bo debug w HADRtools jest w innym package
 		$ISPtools::verbose=1;			# Bo debug w ISPtools jest w innym package
-		$Toys::verbose=1;			# Bo debug w Toys jest w innym package
+		$Gentools::verbose=1;			# Bo debug w Toys jest w innym package
 		dbg("setup","Włączono tryb verbose.\n");
 	}
 	if(defined $opts{"h"}) { help(0); }
@@ -100,7 +100,7 @@ sub setup()
 			{
 				$r_host = $opts{"r"};
 				# tu można wstawić kod sprawdzający cy ta maszyna istnieje i żyje
-				verbose("Ustawiono parntera na $r_host.\n");
+				verb("Ustawiono parntera na $r_host.\n");
 			}
 			else
 			{
@@ -128,7 +128,7 @@ sub setup()
 	if(defined $opts{"l"})
 	{
 		$l_host = $opts{"l"};
-		verbose("Ustawiono lokalny host na $l_host.\n");
+		verb("Ustawiono lokalny host na $l_host.\n");
 	}
 	
 	if(defined $opts{"u"})
@@ -147,14 +147,14 @@ sub setup()
 		}
 	}
 	
-	verbose("Sprawdzanie poprawności użyszkodnika $instuser... ");
+	verb("Sprawdzanie poprawności użyszkodnika $instuser... ");
 	if(check_DB2_inst("$instuser"))
 	{
-		verbose("OK\n");
+		verb("OK\n");
 	}
 	else
 	{
-		verbose("Qpa!\n");
+		verb("Qpa!\n");
 		print STDERR "Użytkownik $instuser nie jest właścicielem instancji DB2.\n";
 		exit(4);
 	}
@@ -171,7 +171,8 @@ setup();
 if("$mode" eq "show")
 {
 	my %hadr_cfg = get_HADR_cfg("$instuser");
-	print_hash("Kondiguracja HADR dla tsmdb1, użytkownik $instuser:", %hadr_cfg);
+	verb("Kondiguracja HADR dla tsmdb1, użytkownik $instuser:\n");
+	print_hash(%hadr_cfg);
 	exit 0;
 }
 
