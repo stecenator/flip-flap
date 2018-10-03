@@ -6,7 +6,8 @@ use Gentools qw(verb dbg print_hash error);
 use Exporter qw(import);
 # exportowane funkcje
 our @EXPORT = qw(get_HADR_mode $debug get_HADR_cfg check_DB2_inst set_HADR_cfg 
-	is_DB2_active start_HADR_slave start_HADR_master start_DB2 get_HADR_status is_DB_active is_peer_connected);
+	is_DB2_active start_HADR_slave start_HADR_master start_DB2 get_HADR_status is_DB_active is_peer_connected
+	takeover_HADR_forced stop_DB2 takeover_HADR);
 our ($debug, $verbose);
 
 sub is_DB_active($$)
@@ -53,6 +54,8 @@ sub get_HADR_status($)
 			next if !($line =~ / = /);			# pomijanie śmieci
 			chomp $line;
 			(my $key, my $val) = split / = /, $line;
+			$key =~ s/^\s+|\s+$//g;
+			$val =~ s/^\s+|\s+$//g;
 			$ret{"$key"} = $val;
 		}
 	}
@@ -66,13 +69,31 @@ sub start_DB2($)
 #	0 - Start nie udany
 {
 	my @out = qx/su - $_[0] -c "db2start"/;
+	print "Na wszelki wypadek:\n", @out;
 	my $rc = $? >> 8;
 	if ($rc != 0)			# Coś poszło nie tak
 	{
 		dbg("HADRtools::start_DB2", "Komenda \"db2start\" nie powiodła się. Kod wyjścia \"su -c ...\": $rc\n");
 		return 0;
 	}
-	#~ dbg("HADRtools::start_HADR_slave", "su - $_[0] -c \"db2 start hadr on db tsmdb1 as standby\"\n");
+	dbg("HADRtools::start_DB2", "su - $_[0] -c \"db2start\" RC = $rc.\n");
+	return 1;
+}
+
+sub stop_DB2($)
+# start_DB2($user) - wykonuje db2start na userze $user.
+# Zwrotka:
+#	1 - Stop udany
+#	0 - Stop nie udany
+{
+	my @out = qx/su - $_[0] -c "db2stop"/;
+	print @out;
+	my $rc = $? >> 8;
+	if ($rc != 0)			# Coś poszło nie tak
+	{
+		dbg("HADRtools::stop_DB2", "Komenda \"db2stop\" nie powiodła się. Kod wyjścia \"su -c ...\": $rc\n");
+		return 0;
+	}
 	return 1;
 }
 
@@ -324,4 +345,36 @@ sub is_peer_connected($)
 	}
 }
 
-1;				# Bo tak kurwa ma być
+sub takeover_HADR_forced($$)
+# wykonuje na uzerze $_[1] komendę db2 takeover hadr on db $_[2] by force.
+# Zwrotki:
+#	1 - Udało się
+#	0 - Nie udało się
+{
+	my @out = qx/su - $_[0] -c "db2 takeover hadr on db $_[1] by force"/;
+	my $rc = $? >> 8;
+	if ($rc != 0)			# Coś poszło nie tak
+	{
+		dbg("HADRtools::takeover_HADR_forced", "Wykonanie \"db2 takeover hadr on db $_[1] by force\" na użytkowniku $_[0] nie powiodło się. Kod wyjścia: $rc\n");
+		return 0;
+	}
+	return 1;			# Udało się!
+}
+
+sub takeover_HADR($$)
+# wykonuje na uzerze $_[1] komendę db2 takeover hadr on db $_[2]
+# Zwrotki:
+#	1 - Udało się
+#	0 - Nie udało się
+{
+	my @out = qx/su - $_[0] -c "db2 takeover hadr on db $_[1]"/;
+	my $rc = $? >> 8;
+	if ($rc != 0)			# Coś poszło nie tak
+	{
+		dbg("HADRtools::takeover_HADR_forced", "Wykonanie \"db2 takeover hadr on db $_[1]\" na użytkowniku $_[0] nie powiodło się. Kod wyjścia: $rc\n");
+		return 0;
+	}
+	return 1;			# Udało się!
+}
+
+1;					# Bo tak kurwa ma być

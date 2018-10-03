@@ -12,7 +12,7 @@
 #   1   - Nie podano trybu pracy                                              #
 #   2   - Niepoprawna opcja                                                   #
 #   3   - Nipoprawny tryb pracy                                               #
-#   4   - Nie znaleziono insancji db2 dla $instuser                           #
+#   4   - Nie znaleziono instancji db2 dla $instuser                          #
 #   5   - Podano nieprawidłowego użytkownika instancji                        #
 #   6   - Skrypt uruchomiono jako nie root                                    #
 #   7   - Nie podano nazwy hosta partnera                                     #
@@ -28,6 +28,10 @@
 #  17   - Nie udało się uruchomić TSMa                                        #
 #  18   - Próba failover przy działającym partnerze                           #
 #  19   - Próba failover przy na węźle primary                                #
+#  20   - Failover  nie udany                                                 #
+#  21   - Takeover nieudany                                                   #
+#  22   - DB2 się nie złożyło                                                 #
+#  23   - Nie udało się podnieść bazy w trybie HADR master                    #
 #                                                                             #
 ###############################################################################
 use Getopt::Std;
@@ -35,7 +39,7 @@ use strict "vars";
 use lib qw(./ ../toys/lib);								# żeby można było rzrobić use Moduł z pliku Moduł.pm w biezacym katalogu
 use HADRtools;	
 use Gentools qw(dbg verb yes_no print_hash check_proc error);
-use ISPtools qw(start_ISP is_ISP_active);
+use ISPtools qw(start_ISP is_ISP_active stop_ISP);
 # Kosmetyka 
 our $debug = 0;
 our $verbose = 0;
@@ -86,9 +90,9 @@ sub setup()
 	if(defined $opts{"v"}) 
 	{ 
 		$verbose =1; 
-		$HADRtools::verbose=1;			# Bo debug w HADRtools jest w innym package
-		$ISPtools::verbose=1;			# Bo debug w ISPtools jest w innym package
-		$Gentools::verbose=1;			# Bo debug w Toys jest w innym package
+		$HADRtools::verbose=1;			# Bo verbose w HADRtools jest w innym package
+		$ISPtools::verbose=1;			# Bo verbose w ISPtools jest w innym package
+		$Gentools::verbose=1;			# Bo verbose w Toys jest w innym package
 		dbg("Main::setup","Włączono tryb verbose.\n");
 	}
 	if(defined $opts{"h"}) { help(0); }
@@ -158,6 +162,8 @@ sub setup()
 			exit(15);
 		}
 	}
+	
+	ISPtools::init_module($debug, $verbose, "admin", "ibm12345" );
 	
 	dbg("Main::setup","Tryb: $mode\n");
 }
@@ -275,18 +281,171 @@ elsif($mode eq "slave")
 }
 elsif($mode eq "takeover")
 {
-	verb("Takeover - Durnostojka.\n");
+	print("Sprawdzanie czy baza $instuser/TSMDB1 jest aktywna... ");
+	if(!is_DB_active("$instuser", "TSMDB1"))
+	{
+		print("Nie\n");
+		print STDERR "Baza TSMDB1 nie jest aktywna. Status HADR niedostępny.\n";
+		exit(9);
+	}
+	print("Tak\n");
+	
+	my %hadr_status = get_HADR_status("$instuser");
+	if ( $hadr_status{"HADR_ROLE"} eq "PRIMARY" )		# Jestem na masterze. CZy mam się przygotować do zmiany roli?
+	{
+		print "Wywołano takeover na serwerze \"master\".\n";
+		print "Możesz przygotować go do roli slave.\n";
+		print "W ramach przygotowania zostaną wykonane następujące czynności:\n";
+		print "*\tZatrzymanie serwera ISP i silnika bazy DB2\n";
+		print "*\tStart silnika bazy DB2 (ciągle w trybie \"master\") \n\t- zamiana ról jest inicjowana przez drugą stronę.\n";
+		if( !yes_no(" Czy przygotować ten serwer do roli \"slave\"?\n", "N") )
+		{
+			error("MAIN::failover", "Użyszkodnik spietrał.\n", 10);
+		}
+		
+		# No to Zatrzymujemy TSMa. Razem z nim staje db2, więc trzeba ję będzie póżniej podnieść z powrotem
+		print "Zatrzymywanie serwera ISP (DB2 razem z nim)... ";
+		if( !stop_ISP() )
+		{
+			print "Ciągle żyje!\n";
+			error("MAIN:takeover_prepare", "Serwer ISP się nie złożył.\n", 11);
+		}
+		print "Trup.\n";
+		
+		dbg("MAIN:takeover_prepare", "Prewencyjne spanie 20s na złożenie DB2.\n");
+		verb("Prewencyjne spanie 20s na złożenie DB2.\n");
+		
+		#Start managera
+		print "Startowanie managera DB2...";
+		if ( !start_DB2("$instuser") )
+		{
+			print "Nie udane.\n";
+			error("MAIN:takeover_prepare", "Rozruch DB2 nieudany.\n", 14);
+		}
+		print "OK.\n";
+		
+		#start HADRa na TSMDB1
+		print "Startowanie TSMDB1 jako HADR master... ";
+		if( !start_HADR_master("$instuser") )
+		{
+			print "Nie udane.\n";
+			error("MAIN::takeover_prepare", "Rozruch bazy TSMDB1 w trybie HADR master nieudany.\n", 23);
+		}
+		print "OK.\n";
+		
+		print "Przygotowanie do \"takeover\" zakończone. Wykonaj teraz tę operację na serwerze \"slave\".\n";
+	}
+	#Czy jestem na slave?
+	elsif ($hadr_status{"HADR_ROLE"} eq "STANDBY" )		# Jestem na slave. Pora się wypromować
+	{
+	# Czas na ogarnięcie synchronizacji VTL/Storage pool. Zewnętrznymi skryptami!
+		if ( !yes_no("Czy failover VTL został już zrobiony?", "N") )
+		{
+			error("MAIN::failover", "Wcześniej należy dokonać przełączenia VTL na stronę, gdzie przenoszony jest ISP.\n", 10);
+		}
+	
+	#Czy na masterze wykonano takeover_prepare?
+		if( !yes_no("Czy na serwerze \"master\" wykonano przygotowanie do \"takeover\"?", "N") )
+		{
+			error("MAIN::takeover", "Wykonaj najpierw operację \"takeover\" na masterze.\n", 10);
+		}
+		
+	# Czy jestem w stanie PEER, CONNECTED
+		if( ($hadr_status{"HADR_STATE"} ne "PEER") || ($hadr_status{"HADR_CONNECT_STATUS"} ne "CONNECTED") )
+		{
+			error("MAIN::takeover", "Stan połączenia HADR jest niewłaściwy: HADR_STATE = ".$hadr_status{"HADR_STATE"}." HADR_CONNECT_STATUS = ".$hadr_status{"HADR_CONNECT_STATUS"}.".\n", 12);
+		}
+	
+	#Chwila refleksji
+		if ( !yes_no("Na pewno przełączać?", "N") )
+		{
+			error("MAIN::failover", "Przewano na życzenie użyskodnika.\n", 10);
+		}
+		
+	# Takeover HADRa
+		print "Promowanie instancji $instuser...";
+		if( !takeover_HADR("$instuser", "TSMDB1") )
+		{
+			print "Nie udane.\n";
+			error("MAIN::takeover", "Nie udało się wypromować bazy TSMDB1 w instancji $instuser.\n", 21);
+		}
+		print "OK.\n";
+		
+	# Start TSMa w nowej lokalizacji
+		print "Startowanie instancji IBM spectrum Protect: $instuser... ";
+		if( my $pid = start_ISP("$instuser", "$instdir"))
+		{
+			verb("OK, pid = $pid\n");
+			exit(0)
+		}
+		else
+		{
+			verb("Qpa!\n");
+			error("MAIN::takeover", "Nie udało się uruchomić instancji $instuser IBM Spectrum Protect.\n", 17);
+		}
+	}
 }
 elsif($mode eq "failover")
 {
-	if( $hadr_cfg{"ROLE"} eq "PRIMARY")
+	print("Sprawdzanie czy baza $instuser/TSMDB1 jest aktywna... ");
+	if(!is_DB_active("$instuser", "TSMDB1"))
 	{
-		error("MAIN:", "Oprację \"failover\" można wykonać tylko na maszynie STANDBY.\n", 19);
+		print("Nie\n");
+		print STDERR "Baza TSMDB1 nie jest aktywna. Status HADR niedostępny.\n";
+		exit(9);
+	}
+	print("Tak\n");
+	
+	my %hadr_status = get_HADR_status("$instuser");
+	if ( $hadr_status{"HADR_ROLE"} ne "STANDBY" )
+	{
+		error("MAIN:", "Operację \"failover\" można wykonać wyłącznie na maszynie w trybie STANDBY. Bieżący tryb to ".$hadr_status{"HADR_ROLE"}.".\n", 19);
 	}
 	
 	dbg("MAIN:", "Rozpoczynanie operacji failover.\n");
 	verb("Rozpoczynanie operacji failover.\n");
 	
+	# Czy HADR ciągle działa? Nie chcę tego.
+	if ( $hadr_status{"HADR_CONNECT_STATUS"} eq "CONNECTED" )
+	{
+		error("MAIN::failover", "Partner nadal jest podłączony. Użyj funkcji \"takeover\" lub wyłącz mastera.\n", 18);
+	}
+	
+	# Czas na ogarnięcie synchronizacji VTL/Storage pool. Zewnętrznymi skryptami!
+	if ( !yes_no("Czy failover VTL został już zrobiony?", "N") )
+	{
+		error("MAIN::failover", "Wcześniej należy dokonać przełączenia VTL na stronę, gdzie przenoszony jest ISP.\n", 10);
+	}
+	
+	#Chwila refleksji
+	if ( !yes_no("Na pewno przełączać?", "N") )
+	{
+		error("MAIN::failover", "Przewano na życzenie użyskodnika.\n", 10);
+	}
+	
+	#Przełączenie 
+	if ( takeover_HADR_forced("$instuser", "TSMDB1") )
+	{
+		print "Baza TSMDB1 instancji $instuser została przełączona na ten serwer.\n";
+	}
+	else
+	{
+		error("MAIN:failover", "Nie udało się wypromować bazy.\n", 20);
+	}
+	
+	#Jeśli tu jestem, to mogę startować TSM
+	verb("Startowanie instancji IBM spectrum Protect: $instuser... ");
+	if( my $pid = start_ISP("$instuser", "$instdir"))
+	{
+		verb("OK, pid = $pid\n");
+		exit(0)
+	}
+	else
+	{
+		verb("Qpa!\n");
+		print STDERR "Nie udało się uruchomić instancji $instuser IBM Spectrum Protect.\n";
+		exit(17);
+	}
 }
 elsif($mode eq "show")
 {
@@ -312,11 +471,11 @@ elsif($mode eq "status")
 	$isp_pid = is_ISP_active("$instuser");
 	if( $isp_pid > 0 )
 	{
-		print "Tak. PID = $isp_pid\n";
+		print "Aktywny. PID = $isp_pid\n";
 	}
 	else
 	{
-		print "Nie.\n";
+		print "Nie aktywny.\n";
 	}
 	
 	exit 0;
