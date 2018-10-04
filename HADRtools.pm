@@ -69,7 +69,6 @@ sub start_DB2($)
 #	0 - Start nie udany
 {
 	my @out = qx/su - $_[0] -c "db2start"/;
-	print "Na wszelki wypadek:\n", @out;
 	my $rc = $? >> 8;
 	if ($rc != 0)			# Coś poszło nie tak
 	{

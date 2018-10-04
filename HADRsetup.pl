@@ -28,8 +28,8 @@ use lib './';									# żeby można było rzrobić use Moduł z pliku Moduł.pm
 # Moje moduły
 #~ use HADRtools qw(get_HADR_mode get_HADR_cfg check_DB2_inst set_HADR_cfg);	# Bo nie chce wciągać wszystkich exportowanych funkcji
 use HADRtools;	
-use Gentools qw(verb dbg print_hash);
-use ISPtools;
+use Gentools qw(verb dbg print_hash yes_no);
+use ISPtools qw(is_ISP_active);
 # Kosmetyka 
 our $debug = 0;
 our $verbose = 0;

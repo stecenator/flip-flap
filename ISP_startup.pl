@@ -32,6 +32,7 @@
 #  21   - Takeover nieudany                                                   #
 #  22   - DB2 się nie złożyło                                                 #
 #  23   - Nie udało się podnieść bazy w trybie HADR master                    #
+#  24   - Próba uruchomienia mastera na wężle, który był slave                #
 #                                                                             #
 ###############################################################################
 use Getopt::Std;
@@ -203,27 +204,33 @@ if(!%hadr_cfg)
 # Startuję w trybie mastera
 if($mode eq "master")
 {
+	# Nie checę próbować wystartować bazy, która nie  była masterem.
+	if( $hadr_cfg{"ROLE"} ne "PRIMARY")
+	{
+		error("MAIN::master", "Bieżący host nie był wcześniej masterem. Jeśli wiesz co robisz, użyj operaccji \"failover\".\n", 24);
+	}
+	
+	dbg("MAIN::master", "Rola =".$hadr_cfg{"ROLE"}."\n.");
+	
 	# W trybie master chcemy mieć najpierw pasywną maszynę	
 	exit(10) if !yes_no("Czy instancja $instuser na ".$hadr_cfg{"HADR_REMOTE_HOST"}." jest uruchomiona w trybie slave?", "N");
 	
-	verb("Sprawdzanie, czy $instuser/TSMDB1 jest już aktywna... ");
+	print "Sprawdzanie, czy $instuser/TSMDB1 jest już aktywna... ";
 	if(is_DB_active("$instuser","TSMDB1"))
 	{
-		verb("Tak\n");
+		print "Tak\n";
 		verb("Sprawdzenie biezącego trybu HADR bazy $instuser/TSMDB1... ");
 		my $hadr_mode = get_HADR_mode("$instuser");
 		if( $hadr_mode == 0)
 		{	
 			verb("Standalone\n");
-			print STDERR "Baza $instuser/TSMDB1 działa, ale w trybie samodzielnym.\n";
-			exit(16);
+			error("MAIN::master:", "Baza $instuser/TSMDB1 działa, ale w trybie samodzielnym.\n", 16);
 		}
 		elsif ( $hadr_mode == 2 )
 		{	
 			verb("Slave\n");
-			print STDERR "Baza $instuser/TSMDB1 działa, ale jako HADR slave.\n";
-			print STDERR "Żeby przełączyć klaster na tę instancję użyj polecenia $my_name -m takeover.\n";
-			exit(16);
+			error("MAIN::master:", "Baza $instuser/TSMDB1 działa, ale jako HADR slave.\n", 0);
+			error("MAIN::master:", "Żeby przełączyć klaster na tę instancję użyj polecenia $my_name -m takeover.\n", 16);
 		}
 		elsif ( $hadr_mode == 1 )
 		{
@@ -232,51 +239,48 @@ if($mode eq "master")
 		else
 		{
 			verb("Nieznany\n");
-			print STDERR "Nie udało się określić trybu pracy bazy $instuser/TSMDB1. Być może warto użyć trybu debug (-d).\n";
-			exit(16);
+			error("MAIN::master:", "Nie udało się określić trybu pracy bazy $instuser/TSMDB1. Być może warto użyć trybu debug (-d).\n", 16);
 		}
 	}
 	else
 	{
-		verb("Nie\n");
-		verb("Uruchamianie bazy $instuser/TSMDB1 w trybie master... ");
+		print "Nie\n";
+		print "Uruchamianie bazy $instuser/TSMDB1 w trybie master... ";
 		if(start_HADR_master($instuser))
 		{
-			verb("OK.\n");
+			print "OK.\n";
 		}
 		else
 		{
-			verb("Qpa!\n");
-			print STDERR "Uruchomienie bazy $instuser/TSMDB1 w trybie master nie powodło się.\n";
-			exit(13);
+			print "Qpa!\n";
+			error("MAIN::master:", "Uruchomienie bazy $instuser/TSMDB1 w trybie master nie powodło się.\n", 13);
 		}
 	}
+	
 	# Na tym etapie baza TSMDB1 jest aktywowana jako HADR master.
-	verb("Startowanie instancji IBM spectrum Protect: $instuser... ");
+	print "Startowanie instancji IBM spectrum Protect: $instuser... ";
 	if(start_ISP("$instuser", "$instdir"))
 	{
-		verb("OK\n");
+		print "OK\n";
 		exit(0)
 	}
 	else
 	{
-		verb("Qpa!\n");
-		print STDERR "Nie udało się uruchomić instancji $instuser IBM Spectrum Protect.\n";
-		exit(17);
+		print "Qpa!\n";
+		error("MAIN::master:", "Nie udało się uruchomić instancji $instuser IBM Spectrum Protect.\n", 17);
 	}
 }
 elsif($mode eq "slave")
 {
-	verb("Uruchamianie instancji $instuser w trybie slave... ");
+	print "Uruchamianie instancji $instuser w trybie slave... ";
 	if(start_HADR_slave($instuser))
 	{
-		verb("OK.\n");
+		print "OK.\n";
 	}
 	else
 	{
-		verb("Qpa!\n");
-		print STDERR "Uruchomienie instancji $instuser w trybie slave nie powodło się.\n";
-		exit(13);
+		print "Qpa!\n";
+		error("MAIN::slave:", "Uruchomienie instancji $instuser w trybie slave nie powodło się.\n", 13);
 	}
 }
 elsif($mode eq "takeover")
@@ -285,8 +289,7 @@ elsif($mode eq "takeover")
 	if(!is_DB_active("$instuser", "TSMDB1"))
 	{
 		print("Nie\n");
-		print STDERR "Baza TSMDB1 nie jest aktywna. Status HADR niedostępny.\n";
-		exit(9);
+		error("MAIN::takeover:", "Baza TSMDB1 nie jest aktywna. Status HADR niedostępny.\n", 9);
 	}
 	print("Tak\n");
 	
@@ -399,10 +402,10 @@ elsif($mode eq "failover")
 	my %hadr_status = get_HADR_status("$instuser");
 	if ( $hadr_status{"HADR_ROLE"} ne "STANDBY" )
 	{
-		error("MAIN:", "Operację \"failover\" można wykonać wyłącznie na maszynie w trybie STANDBY. Bieżący tryb to ".$hadr_status{"HADR_ROLE"}.".\n", 19);
+		error("MAIN::failover", "Operację \"failover\" można wykonać wyłącznie na maszynie w trybie STANDBY. Bieżący tryb to ".$hadr_status{"HADR_ROLE"}.".\n", 19);
 	}
 	
-	dbg("MAIN:", "Rozpoczynanie operacji failover.\n");
+	dbg("MAIN::failover", "Rozpoczynanie operacji failover.\n");
 	verb("Rozpoczynanie operacji failover.\n");
 	
 	# Czy HADR ciągle działa? Nie chcę tego.
