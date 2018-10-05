@@ -37,7 +37,7 @@
 ###############################################################################
 use Getopt::Std;
 use strict "vars";
-use lib qw(./ ../toys/lib);								# żeby można było rzrobić use Moduł z pliku Moduł.pm w biezacym katalogu
+use lib qw(./ ../toys/lib);							# żeby można było rzrobić use Moduł z pliku Moduł.pm w biezacym katalogu
 use HADRtools;	
 use Gentools qw(dbg verb yes_no print_hash check_proc error);
 use ISPtools qw(start_ISP is_ISP_active stop_ISP);
@@ -48,9 +48,11 @@ our $my_name = $0;
 our %opts;
 our %hadr_cfg =();
 our $instuser = "tsminst1";							# Użyszkodnik instancji
-our $instdir = "/tsm/tsminst1/";							# Domyślny katalog instancji tsm
+our $instdir = "/tsm/tsminst1/";						# Domyślny katalog instancji tsm
 our $mode="";
 our $isp_pid = -1;
+our $ispadm = "admin";								# Administrator ISP.
+our $isppass = "ibm123";							# hasło tegoż
 
 # Wyświetla help do programu.
 sub help($)
@@ -64,6 +66,8 @@ sub help($)
 	print "  show: Podaje bieżącą konfigurację HADR.\n";
 	print "  status: Podaje bieżący status HADR.\n";
 	print " -u użytkownik: Zmiana domyślnego użytkownika instancji  ISP/HADR.\n";
+	print " -a administrator ISP. Domyślnie admin.\n";
+	print " -p hasło ISP. Domyślnie ibm12345.\n";
 	print " -i inst_dir: Katalog instancji serwera.\n";
 	print " -v: gadatliwie\n";
 	print " -d: debug, czyli jeszcze bardziej gadatliwie\n";
@@ -79,7 +83,7 @@ sub setup()
 		print STDERR "Ten program musi być uruchomiony jako uzytkownik root.\n";
 		help(6);
 	}
-	getopts("vdhm:u:i:",\%opts) or help(2);
+	getopts("vdhm:u:i:a:p:",\%opts) or help(2);
 	if(defined $opts{"d"}) 
 	{ 
 		$debug =1;
@@ -137,6 +141,20 @@ sub setup()
 		verb("Katalog instancji instancji ISP: $instdir.\n");
 	}
 	
+	if(defined $opts{"a"})
+	{
+		$ispadm = $opts{"a"};
+		dbg("Main::setup", "Zmieniono domyslnego admina ISP na $ispadm.\n");
+		verb("Administrator ISP: $ispadm.\n");
+	}
+	
+	if(defined $opts{"p"})
+	{
+		$isppass = $opts{"p"};
+		dbg("Main::setup", "Zmieniono domyślne hasło admina ISP.\n");
+		verb("Zmieniono domyślne hasło admina ISP.\n");
+	}
+	
 	verb("Sprawdzanie poprawności użyszkodnika $instuser... ");
 	if(check_DB2_inst("$instuser"))
 	{
@@ -164,7 +182,7 @@ sub setup()
 		}
 	}
 	
-	ISPtools::init_module($debug, $verbose, "admin", "ibm12345" );
+	ISPtools::init_module($debug, $verbose, "$ispadm", "$isppass" );
 	
 	dbg("Main::setup","Tryb: $mode\n");
 }
@@ -314,9 +332,6 @@ elsif($mode eq "takeover")
 			error("MAIN:takeover_prepare", "Serwer ISP się nie złożył.\n", 11);
 		}
 		print "Trup.\n";
-		
-		dbg("MAIN:takeover_prepare", "Prewencyjne spanie 20s na złożenie DB2.\n");
-		verb("Prewencyjne spanie 20s na złożenie DB2.\n");
 		
 		#Start managera
 		print "Startowanie managera DB2...";
