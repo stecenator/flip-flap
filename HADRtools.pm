@@ -113,6 +113,23 @@ sub start_HADR_master($)
 	return 1;
 }
 
+sub stop_HADR_master($)
+# stop_HADR_master($user) - zatrzymuje HADR na bazie TSMDB1. To nie zatrzymuje bazy!
+# Zwrotka:
+#	1 - OK
+#	0 - Nie OK.
+{
+	my @out = qx/su - $_[0] -c "db2 stop hadr on db tsmdb1"/;
+	my $rc = $? >> 8;
+	if ($rc != 0)			# Coś poszło nie tak
+	{
+		dbg("HADRtools::stop_HADR_master", "Komenda \"db2 stop hadr on db tsmdb1\" nie powiodła się. Kod wyjścia \"su -c ...\": $rc\n");
+		return 0;
+	}
+	dbg("HADRtools::stop_HADR_master", "Wykonano: su - $_[0] -c \"db2 start hadr on db tsmdb1\"\n");
+	return 1;
+}
+
 sub start_HADR_slave($)
 # start_HADR_slave($user) - startuje bazę w trybie slave
 # Zwrotka:
