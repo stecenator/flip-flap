@@ -54,7 +54,7 @@ sub help($)
 	print "\t-u użytkownik:\tZmiana domyślnego użytkownika instancji  ISP/HADR.\n";
 	print "\t-l host_loklany:\tLokalna nazwa hosta. Domyślnie `hostname -s`.\n";
 	print "\t-r host_zdalny:\tHostname partnera.\n";
-	print "\t-p host_zdalny:\tHostname partnera.\n";
+	print "\t-p port do replikacjia HADR. Dla obydwu hostów.\n";
 	print "\t-v:\tgadatliwie\n";
 	print "\t-d:\tdebug, czyli jeszcze bardziej gadatliwie\n";
 	print "\t-h:\tWyświetla pomoc, czyli ten kominikat :-P\n";
@@ -206,6 +206,7 @@ if("$mode" eq "master" or "$mode" eq "slave")
 		"LOGINDEXBUILD" => "ON"
 		);
 	my %hadr_upd_status = set_HADR_cfg($instuser, %hadr_cfg);
-	print_hash("Status aktualizacji parametrów HADR:", %hadr_upd_status);
+	print "Status aktualizacji parametrów HADR:\n";
+	print_hash( %hadr_upd_status);
 	exit 0;
 }
