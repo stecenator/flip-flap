@@ -33,6 +33,7 @@
 #  22   - DB2 się nie złożyło                                                 #
 #  23   - Nie udało się podnieść bazy w trybie HADR master                    #
 #  24   - Próba uruchomienia mastera na wężle, który był slave                #
+#  25   - Nie udało się przełączyć mastera HADR w stand-alone                 #
 #                                                                             #
 ###############################################################################
 use Getopt::Std;
@@ -223,7 +224,20 @@ if(!%hadr_cfg)
 if($mode eq "master")
 {
 	# Nie checę próbować wystartować bazy, która nie  była masterem.
-	if( $hadr_cfg{"ROLE"} ne "PRIMARY")
+	if( $hadr_cfg{"ROLE"} eq "STANDARD")
+	{
+		print "Wykryto bazę w trybie stand-alone. Przestawiam w master...";
+		
+		dbg("MAIN::master", "Bieżący host jest w trybie STANDARD.\n");
+		if( !start_HADR_master("$instuser") )
+		{
+			print " Qpa.\n";
+			error("MAIN::master", "Nie udało się przestawić bazy w tryb master.\n", 16);
+		}
+		print " OK.\n";
+		exit 0;
+	}
+	elsif( $hadr_cfg{"ROLE"} ne "PRIMARY")
 	{
 		error("MAIN::master", "Bieżący host nie był wcześniej masterem. Jeśli wiesz co robisz, użyj operaccji \"failover\".\n", 24);
 	}
@@ -300,6 +314,9 @@ elsif($mode eq "slave")
 		print "Qpa!\n";
 		error("MAIN::slave:", "Uruchomienie instancji $instuser w trybie slave nie powodło się.\n", 13);
 	}
+	
+	print "Jeżeli włączono slave po awarii, upewnij się, że HADR na głównym serwerze jest włączony! \n";
+	
 }
 elsif($mode eq "takeover")
 {
@@ -448,7 +465,16 @@ elsif($mode eq "failover")
 	}
 	else
 	{
-		error("MAIN:failover", "Nie udało się wypromować bazy.\n", 20);
+		error("MAIN::failover", "Nie udało się wypromować bazy.\n", 20);
+	}
+	
+	if( stop_HADR_master("$instuser") )
+	{
+		dbg("MAIN::failover", "Zatrzymano HADR na bazie TSMDB1, bo ISP nie umie jej poprawnie wystartować bez dostępu do STANDBY.\n");
+	}
+	else
+	{
+		error("MAIN::failover", "Nie udało się wyłączyć HADR na bazie TSMDB1.\n", 25);
 	}
 	
 	#Jeśli tu jestem, to mogę startować TSM
@@ -464,6 +490,11 @@ elsif($mode eq "failover")
 		print STDERR "Nie udało się uruchomić instancji $instuser IBM Spectrum Protect.\n";
 		exit(17);
 	}
+	
+	print "Failover zakończony.\n";
+	print "Po przywróceniu fukcjnonowania uszkodzonego węzła należy:";
+	print "\t- Uruchomić uszkodzony węzeł w trybie \"slave\"";
+	print "\t- Przywrócić HADR komendą \"$my_name -m master\" na aktywnym  węźle.\n";
 }
 elsif($mode eq "show")
 {

@@ -7,7 +7,7 @@ use Exporter qw(import);
 # exportowane funkcje
 our @EXPORT = qw(get_HADR_mode $debug get_HADR_cfg check_DB2_inst set_HADR_cfg 
 	is_DB2_active start_HADR_slave start_HADR_master start_DB2 get_HADR_status is_DB_active is_peer_connected
-	takeover_HADR_forced stop_DB2 takeover_HADR);
+	takeover_HADR_forced stop_DB2 takeover_HADR stop_HADR_master);
 our ($debug, $verbose);
 
 sub is_DB_active($$)
