@@ -223,21 +223,9 @@ if(!%hadr_cfg)
 # Startuję w trybie mastera
 if($mode eq "master")
 {
-	# Nie checę próbować wystartować bazy, która nie  była masterem.
-	if( $hadr_cfg{"ROLE"} eq "STANDARD")
-	{
-		print "Wykryto bazę w trybie stand-alone. Przestawiam w master...";
-		
-		dbg("MAIN::master", "Bieżący host jest w trybie STANDARD.\n");
-		if( !start_HADR_master("$instuser") )
-		{
-			print " Qpa.\n";
-			error("MAIN::master", "Nie udało się przestawić bazy w tryb master.\n", 16);
-		}
-		print " OK.\n";
-		exit 0;
-	}
-	elsif( $hadr_cfg{"ROLE"} ne "PRIMARY")
+	# Nie checę próbować wystartować bazy, która nie  była, lub nie może być masterem.
+	
+	if( ( $hadr_cfg{"ROLE"} ne "PRIMARY") || ( $hadr_cfg{"ROLE"} ne "STANDARD"))
 	{
 		error("MAIN::master", "Bieżący host nie był wcześniej masterem. Jeśli wiesz co robisz, użyj operaccji \"failover\".\n", 24);
 	}
@@ -251,26 +239,39 @@ if($mode eq "master")
 	if(is_DB_active("$instuser","TSMDB1"))
 	{
 		print "Tak\n";
-		verb("Sprawdzenie biezącego trybu HADR bazy $instuser/TSMDB1... ");
+		print "Sprawdzenie biezącego trybu HADR bazy $instuser/TSMDB1... ";
 		my $hadr_mode = get_HADR_mode("$instuser");
 		if( $hadr_mode == 0)
 		{	
-			verb("Standalone\n");
-			error("MAIN::master:", "Baza $instuser/TSMDB1 działa, ale w trybie samodzielnym.\n", 16);
+			print "Standalone\n";
+			if( yes_no("Czy przestawić bieżący węzeł w tryb \"master\"?", "N") )
+			{
+				print "Przełączanie bazy TSMDB1: Standalone -> Master ... ";
+				if( !start_HADR_master("$instuser") )
+				{
+					print " Qpa.\n";
+					error("MAIN::master", "Nie udało się przestawić bazy w tryb master.\n", 16);
+				}
+				print " OK.\n";
+			}
+			else
+			{
+				error("MAIN::master", "Użyszkodnik spietrał. Może to i lepiej?\n", 24);
+			}
 		}
 		elsif ( $hadr_mode == 2 )
 		{	
-			verb("Slave\n");
+			print "Slave\n";
 			error("MAIN::master:", "Baza $instuser/TSMDB1 działa, ale jako HADR slave.\n", 0);
 			error("MAIN::master:", "Żeby przełączyć klaster na tę instancję użyj polecenia $my_name -m takeover.\n", 16);
 		}
 		elsif ( $hadr_mode == 1 )
 		{
-			verb("Master\n");
+			print "Master\n";
 		}
 		else
 		{
-			verb("Nieznany\n");
+			print "Nieznany\n";
 			error("MAIN::master:", "Nie udało się określić trybu pracy bazy $instuser/TSMDB1. Być może warto użyć trybu debug (-d).\n", 16);
 		}
 	}
